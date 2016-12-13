@@ -6,6 +6,19 @@
 
 #define I2C_ADDR 0x76
 #define ID_ADDR 0xD0
+#define CTRL_MEAS_ADDR 0xF4
+#define CTRL_HUM_ADDR 0xF2
+#define CONFIG_ADDR 0xF5
+#define PRESS_MSB_ADDR 0xF7
+#define TEMP_MSB_ADDR 0xFA
+#define HUM_MSB_ADDR 0xFD
+
+#define MODE_FORCED 0x01
+#define OSRS_H_SKIPPED 0x00
+#define OSRS_P_SKIPPED 0x00
+#define OSRS_T_SKIPPED 0x00
+#define IIR_FILTER_OFF 0x00
+#define SPI_OFF 0x00
 
 void configure(int _SDApin, int _SCLpin, uint8_t i2cAddress);
 int8_t readId();
@@ -22,6 +35,7 @@ void setup() {
 
 void loop() {
 }
+
 
 void configure(int _SDApin, int _SCLpin, uint8_t i2cAddress) {
   Serial.println("BME280 config start...");
