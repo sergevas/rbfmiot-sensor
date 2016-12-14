@@ -12,6 +12,24 @@
 #define PRESS_MSB_ADDR 0xF7
 #define TEMP_MSB_ADDR 0xFA
 #define HUM_MSB_ADDR 0xFD
+#define DIG_T1_ADDR 0x88
+#define DIG_T2_ADDR 0x8A
+#define DIG_T3_ADDR 0x8C
+#define DIG_P1_ADDR 0x8E
+#define DIG_P2_ADDR 0x90
+#define DIG_P3_ADDR 0x92
+#define DIG_P4_ADDR 0x94
+#define DIG_P5_ADDR 0x96
+#define DIG_P6_ADDR 0x98
+#define DIG_P7_ADDR 0x9A
+#define DIG_P8_ADDR 0x9C
+#define DIG_P9_ADDR 0x9E
+#define DIG_H1_ADDR 0xA1
+#define DIG_H2_ADDR 0xE1
+#define DIG_H3_ADDR 0xE3
+#define DIG_H4_ADDR 0xE4
+#define DIG_H5_ADDR 0xE5
+#define DIG_H6_ADDR 0xE7
 
 #define MODE_FORCED 0x01
 #define OSRS_H_SKIPPED 0x00
@@ -19,6 +37,8 @@
 #define OSRS_T_SKIPPED 0x00
 #define IIR_FILTER_OFF 0x00
 #define SPI_OFF 0x00
+
+typedef long signed int BME280_S32_t;
 
 void configure(int _SDApin, int _SCLpin, uint8_t i2cAddress);
 int8_t readId();
@@ -35,7 +55,6 @@ void setup() {
 
 void loop() {
 }
-
 
 void configure(int _SDApin, int _SCLpin, uint8_t i2cAddress) {
   Serial.println("BME280 config start...");
