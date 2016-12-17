@@ -26,7 +26,7 @@
 #define DIG_P9_ADDR 0x9E
 #define DIG_H1_ADDR 0xA1
 #define DIG_H2_ADDR 0xE1
-#define DIG_H3_ADDR 0xE3
+#define DIG_H3_ADDR 0xE3         
 #define DIG_H4_ADDR 0xE4
 #define DIG_H5_ADDR 0xE5
 #define DIG_H6_ADDR 0xE7
@@ -38,19 +38,41 @@
 #define IIR_FILTER_OFF 0x00
 #define SPI_OFF 0x00
 
-typedef signed long BME280_S32_t;
+typedef signed long BME280_S16_t;
 
 struct RawData {
-  uint32_t temp;
-  uint32_t pres;
-  uint32_t hum;
+  uint16_t temp;
+  uint16_t pres;
+  uint16_t hum;
 };
+
+struct TrimmParams {
+  uint16_t digT1;
+  int16_t digT2;
+  int16_t digT3;
+  uint16_t digP1;
+  int16_t digP2;
+  int16_t digP3;
+  int16_t digP4;
+  int16_t digP5;
+  int16_t digP6;
+  int16_t digP7;
+  int16_t digP8;
+  int16_t digP9;
+  uint8_t digH1;
+  int16_t digH2;
+  uint8_t digH3;
+  int16_t digH4;
+  int16_t digH5;
+  int8_t digH6;
+}; 
 
 void configure(int _SDApin, int _SCLpin, uint8_t i2cAddress);
 void initForcedMode();
 void write(uint8_t regAddr, uint8_t data);
 int8_t readId();
 RawData burstRead();
+TrimmParams readTrimmParams();
 
 void setup() {
   Serial.begin(115200);
@@ -63,16 +85,23 @@ void setup() {
 }
 
 void loop() {
-  RawData rawData;
+  double temp;
+  RawData rd;
+  TrimmParams tp;
   Serial.println("Reading raw data...");
   initForcedMode();
-  rawData = burstRead();
-  Serial.print("raw temp 0x");
-  Serial.println(rawData.temp, HEX);
-  Serial.print("raw pres 0x");
-  Serial.println(rawData.pres, HEX);
-  Serial.print("raw hum 0x");
-  Serial.println(rawData.hum, HEX);
+  rd = burstRead();
+  tp = readTrimmParams();
+  temp = (double)compensateTemp(rd, tp) / 100;
+  Serial.print("temp ");
+  Serial.println(temp);
+  
+//  Serial.print("raw temp 0x");
+//  Serial.println(rawData.temp, HEX);
+//  Serial.print("raw pres 0x");
+//  Serial.println(rawData.pres, HEX);
+//  Serial.print("raw hum 0x");
+//  Serial.println(rawData.hum, HEX);
   delay(2000);
 }
 
@@ -129,7 +158,7 @@ int8_t readId() {
 
 RawData burstRead() {
   RawData rawData;
-  uint32_t rawDataArray[8];
+  uint16_t rawDataArray[8];
   int rawDataArrayCount = 0;
   Wire.beginTransmission(I2C_ADDR);
   Wire.write(PRES_MSB_ADDR);
@@ -144,5 +173,66 @@ RawData burstRead() {
   rawData.temp = rawDataArray[3] << 12 | rawDataArray[4] << 4 | rawDataArray[5] >> 4;
   rawData.hum = rawDataArray[6] << 8 | rawDataArray[7];
   return rawData;
+}
+
+TrimmParams readTrimmParams() {
+  TrimmParams trimmParams;
+  uint8_t trimmParamsArray[32];
+  int trimmParamsArrayCount = 0;
+  Wire.beginTransmission(I2C_ADDR);
+  Wire.write(DIG_T1_ADDR);
+  Wire.endTransmission();
+  Wire.requestFrom(I2C_ADDR, 24);
+  while (Wire.available()) {
+   trimmParamsArray[trimmParamsArrayCount] = Wire.read();
+   trimmParamsArrayCount++;
+  }
+  Wire.endTransmission();
+  Wire.beginTransmission(I2C_ADDR);
+  Wire.write(DIG_H1_ADDR);
+  Wire.endTransmission();
+  Wire.requestFrom(I2C_ADDR, 1);
+  trimmParamsArray[trimmParamsArrayCount] = Wire.read();
+  trimmParamsArrayCount++;
+  Wire.endTransmission();
+  Wire.beginTransmission(I2C_ADDR);
+  Wire.write(DIG_H2_ADDR);
+  Wire.endTransmission();
+  Wire.requestFrom(I2C_ADDR, 7);
+  while (Wire.available()) {
+   trimmParamsArray[trimmParamsArrayCount] = Wire.read();
+   trimmParamsArrayCount++;
+  }
+  Wire.endTransmission();
+  trimmParams.digT1 = trimmParamsArray[1] << 8 | trimmParamsArray[0];
+  trimmParams.digT2 = trimmParamsArray[3] << 8 | trimmParamsArray[2];
+  trimmParams.digT3 = trimmParamsArray[5] << 8 | trimmParamsArray[4];
+  trimmParams.digP1 = trimmParamsArray[7] << 8 | trimmParamsArray[6];
+  trimmParams.digP2 = trimmParamsArray[9] << 8 | trimmParamsArray[8];
+  trimmParams.digP3 = trimmParamsArray[11] << 8 | trimmParamsArray[10];
+  trimmParams.digP4 = trimmParamsArray[13] << 8 | trimmParamsArray[12];
+  trimmParams.digP5 = trimmParamsArray[15] << 8 | trimmParamsArray[14];
+  trimmParams.digP6 = trimmParamsArray[17] << 8 | trimmParamsArray[16];
+  trimmParams.digP7 = trimmParamsArray[19] << 8 | trimmParamsArray[18];
+  trimmParams.digP8 = trimmParamsArray[21] << 8 | trimmParamsArray[20];
+  trimmParams.digP9 = trimmParamsArray[23] << 8 | trimmParamsArray[22];
+  trimmParams.digH1 = trimmParamsArray[24];
+  trimmParams.digH2 = trimmParamsArray[26] << 8 | trimmParamsArray[25];
+  trimmParams.digH3 = trimmParamsArray[27];
+  uint8_t digH4 = trimmParamsArray[28] << 4 | 0x0F & trimmParamsArray[29];
+  int16_t digH5 = trimmParamsArray[30] << 4 | 0x0F & (trimmParamsArray[29] >> 4);
+  int16_t digH6 = trimmParamsArray[31];
+  return trimmParams;
+}
+
+// Returns temperature in DegC, resolution is 0.01 DegC. Output value of "5123" equals 51.23 DegC.
+// t_fine carries fine temperature as global value
+int32_t compensateTemp(RawData rd, TrimmParams tp) {
+  int32_t var1, var2, temp, t_fine;
+  var1 = ((((rd.temp >> 3) - ((int32_t)tp.digT1 << 1))) * ((int32_t)tp.digT2)) >> 11;
+  var2 = (((((rd.temp >> 4) - ((int32_t)tp.digT1)) * ((rd.temp >> 4) - ((int32_t)tp.digT1))) >> 12) * ((int32_t)tp.digT3)) >> 14;
+  t_fine = var1 + var2;
+  temp = (t_fine * 5 + 128) >> 8;
+  return temp;
 }
 
