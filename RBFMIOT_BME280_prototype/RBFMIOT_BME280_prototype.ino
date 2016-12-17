@@ -13,23 +13,8 @@
 #define TEMP_MSB_ADDR 0xFA
 #define HUM_MSB_ADDR 0xFD
 #define DIG_T1_ADDR 0x88
-#define DIG_T2_ADDR 0x8A
-#define DIG_T3_ADDR 0x8C
-#define DIG_P1_ADDR 0x8E
-#define DIG_P2_ADDR 0x90                                                                                                                                                                                                                                                                             
-#define DIG_P3_ADDR 0x92
-#define DIG_P4_ADDR 0x94
-#define DIG_P5_ADDR 0x96
-#define DIG_P6_ADDR 0x98
-#define DIG_P7_ADDR 0x9A
-#define DIG_P8_ADDR 0x9C
-#define DIG_P9_ADDR 0x9E                                                                              
 #define DIG_H1_ADDR 0xA1
 #define DIG_H2_ADDR 0xE1
-#define DIG_H3_ADDR 0xE3         
-#define DIG_H4_ADDR 0xE4
-#define DIG_H5_ADDR 0xE5
-#define DIG_H6_ADDR 0xE7
 
 #define MODE_FORCED 0x01
 #define OSRS_H_1 0x01
@@ -37,8 +22,6 @@
 #define OSRS_T_1 0x01
 #define IIR_FILTER_OFF 0x00
 #define SPI_OFF 0x00
-
-typedef signed long BME280_S16_t;
 
 struct RawData {
   int32_t temp;
@@ -67,7 +50,7 @@ struct TrimmParams {
   int8_t digH6;
 }; 
 
-void configure(int _SDApin, int _SCLpin, uint8_t i2cAddress);
+void configure(int _SDApin, int _SCLpin);
 void initForcedMode();
 void write(uint8_t regAddr, uint8_t data);
 int8_t readId();
@@ -85,7 +68,7 @@ void setup() {
   Serial.begin(115200);
   Serial.println();
   Serial.println();
-  configure(SDA_PIN, SCL_PIN, I2C_ADDR);
+  configure(SDA_PIN, SCL_PIN);
   Serial.println("Reading device id...");
   Serial.print("Device id 0x");
   Serial.println(readId(), HEX);
@@ -110,27 +93,13 @@ void loop() {
   Serial.print("\thum=");
   Serial.print(hum);
   Serial.println();
-  
-//  Serial.print("raw temp 0x");
-//  Serial.println(rawData.temp, HEX);
-//  Serial.print("raw pres 0x");
-//  Serial.println(rawData.pres, HEX);
-//  Serial.print("raw hum 0x");
-//  Serial.println(rawData.hum, HEX);
   delay(2000);
 }
 
-void configure(int _SDApin, int _SCLpin, uint8_t i2cAddress) {
- 
-  Serial.println("BME280 config start...");
-  Serial.print("SDA pin ");
-  Serial.println(_SDApin);
-  Serial.print("SCL pin ");
-  Serial.println(_SCLpin);
-  Serial.print("I2C address 0x");
-  Serial.println(i2cAddress, HEX);
+void configure(int _SDApin, int _SCLpin) {
+//  Serial.println("BME280 config start...");
   Wire.begin(_SDApin, _SCLpin);
-  Serial.println("BME280 config complete...");
+//  Serial.println("BME280 config complete...");
 }
 
 void initForcedMode() {
