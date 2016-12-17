@@ -16,14 +16,14 @@
 #define DIG_T2_ADDR 0x8A
 #define DIG_T3_ADDR 0x8C
 #define DIG_P1_ADDR 0x8E
-#define DIG_P2_ADDR 0x90
+#define DIG_P2_ADDR 0x90                                                                                                                                                                                                                                                                             
 #define DIG_P3_ADDR 0x92
 #define DIG_P4_ADDR 0x94
 #define DIG_P5_ADDR 0x96
 #define DIG_P6_ADDR 0x98
 #define DIG_P7_ADDR 0x9A
 #define DIG_P8_ADDR 0x9C
-#define DIG_P9_ADDR 0x9E
+#define DIG_P9_ADDR 0x9E                                                                              
 #define DIG_H1_ADDR 0xA1
 #define DIG_H2_ADDR 0xE1
 #define DIG_H3_ADDR 0xE3         
@@ -41,9 +41,9 @@
 typedef signed long BME280_S16_t;
 
 struct RawData {
-  uint16_t temp;
-  uint16_t pres;
-  uint16_t hum;
+  int32_t temp;
+  int32_t pres;
+  int32_t hum;
 };
 
 struct TrimmParams {
@@ -73,6 +73,13 @@ void write(uint8_t regAddr, uint8_t data);
 int8_t readId();
 RawData burstRead();
 TrimmParams readTrimmParams();
+int32_t getFineTemp(RawData rd, TrimmParams tp);
+int32_t compensateTemp(int32_t fineTemp);
+uint32_t compensatePressure(RawData rd, TrimmParams tp, int32_t fineTemp);
+uint32_t compensateHumidity(RawData rd, TrimmParams tp, int32_t fineTemp);
+double getTemperature(int32_t inTemp);
+double getPressure(uint32_t inPres);
+double getHumidity(uint32_t inHum);
 
 void setup() {
   Serial.begin(115200);
@@ -85,16 +92,24 @@ void setup() {
 }
 
 void loop() {
-  double temp;
   RawData rd;
   TrimmParams tp;
-  Serial.println("Reading raw data...");
+  int32_t fineTemp;
+  double temp, pres, hum;
   initForcedMode();
   rd = burstRead();
   tp = readTrimmParams();
-  temp = (double)compensateTemp(rd, tp) / 100;
-  Serial.print("temp ");
-  Serial.println(temp);
+  fineTemp = getFineTemp(rd, tp);
+  temp = getTemperature(compensateTemp(fineTemp));
+  pres = getPressure(compensatePressure(rd, tp, fineTemp));
+  hum = getHumidity(compensateHumidity(rd, tp, fineTemp));
+  Serial.print("temp=");
+  Serial.print(temp);
+  Serial.print("\tpres=");
+  Serial.print(pres);
+  Serial.print("\thum=");
+  Serial.print(hum);
+  Serial.println();
   
 //  Serial.print("raw temp 0x");
 //  Serial.println(rawData.temp, HEX);
@@ -156,9 +171,9 @@ int8_t readId() {
   return id;
 }
 
-RawData burstRead() {
+RawData burstRead() { 
   RawData rawData;
-  uint16_t rawDataArray[8];
+  uint8_t rawDataArray[8];
   int rawDataArrayCount = 0;
   Wire.beginTransmission(I2C_ADDR);
   Wire.write(PRES_MSB_ADDR);
@@ -219,20 +234,70 @@ TrimmParams readTrimmParams() {
   trimmParams.digH1 = trimmParamsArray[24];
   trimmParams.digH2 = trimmParamsArray[26] << 8 | trimmParamsArray[25];
   trimmParams.digH3 = trimmParamsArray[27];
-  uint8_t digH4 = trimmParamsArray[28] << 4 | 0x0F & trimmParamsArray[29];
-  int16_t digH5 = trimmParamsArray[30] << 4 | 0x0F & (trimmParamsArray[29] >> 4);
-  int16_t digH6 = trimmParamsArray[31];
+  trimmParams.digH4 = trimmParamsArray[28] << 4 | 0x0F & trimmParamsArray[29];
+  trimmParams.digH5 = trimmParamsArray[30] << 4 | 0x0F & (trimmParamsArray[29] >> 4);
+  trimmParams.digH6 = trimmParamsArray[31];
   return trimmParams;
+}
+
+int32_t getFineTemp(RawData rd, TrimmParams tp) {
+  int32_t var1, var2, fineTemp;
+  var1 = ((((rd.temp >> 3) - ((int32_t)tp.digT1 << 1))) * ((int32_t)tp.digT2)) >> 11;
+  var2 = (((((rd.temp >> 4) - ((int32_t)tp.digT1)) * ((rd.temp >> 4) - ((int32_t)tp.digT1))) >> 12) * ((int32_t)tp.digT3)) >> 14;
+  fineTemp = var1 + var2;
+  return fineTemp;
 }
 
 // Returns temperature in DegC, resolution is 0.01 DegC. Output value of "5123" equals 51.23 DegC.
 // t_fine carries fine temperature as global value
-int32_t compensateTemp(RawData rd, TrimmParams tp) {
-  int32_t var1, var2, temp, t_fine;
-  var1 = ((((rd.temp >> 3) - ((int32_t)tp.digT1 << 1))) * ((int32_t)tp.digT2)) >> 11;
-  var2 = (((((rd.temp >> 4) - ((int32_t)tp.digT1)) * ((rd.temp >> 4) - ((int32_t)tp.digT1))) >> 12) * ((int32_t)tp.digT3)) >> 14;
-  t_fine = var1 + var2;
-  temp = (t_fine * 5 + 128) >> 8;
-  return temp;
+int32_t compensateTemp(int32_t fineTemp) {
+  return (fineTemp * 5 + 128) >> 8;
+}
+
+// Returns pressure in Pa as unsigned 32 bit integer in Q24.8 format (24 integer bits and 8 fractional bits).
+// Output value of "24674867" represents 24674867/256 = 96386.2 Pa = 963.862 hPa
+uint32_t compensatePressure(RawData rd, TrimmParams tp, int32_t fineTemp) {
+  int64_t var1, var2, pres;
+  var1 = ((int64_t)fineTemp) - 128000;
+  var2 = var1 * var1 * (int64_t)tp.digP6;
+  var2 = var2 + ((var1 * (int64_t)tp.digP5) << 17);
+  var2 = var2 + (((int64_t)tp.digP4) << 35);
+  var1 = ((var1 * var1 * (int64_t)tp.digP3) >> 8) + ((var1 * (int64_t)tp.digP2) << 12);
+  var1 = (((((int64_t)1) << 47) + var1)) * ((int64_t)tp.digP1) >> 33;
+  if (var1 == 0) {
+    return 0; // avoid exception caused by division by zero
+  }
+  pres = 1048576 - rd.pres;
+  pres = (((pres << 31) - var2) * 3125) / var1;
+  var1 = (((int64_t)tp.digP9) * (pres >> 13) * (pres >> 13)) >> 25;
+  var2 = (((int64_t)tp.digP8) * pres) >> 19;
+  pres = ((pres + var1 + var2) >> 8) + (((int64_t)tp.digP7) << 4);
+  return (uint32_t)pres;
+}
+
+// Returns humidity in %RH as unsigned 32 bit integer in Q22.10 format (22 integer and 10 fractional bits).
+// Output value of "47445" represents 47445/1024 = 46.333 %RH
+uint32_t compensateHumidity(RawData rd, TrimmParams tp, int32_t fineTemp) {
+  int32_t v_x1_u32r;
+  v_x1_u32r = (fineTemp - ((int32_t)76800));
+  v_x1_u32r = (((((rd.hum << 14) - (((int32_t)tp.digH4) << 20) - (((int32_t)tp.digH5) * v_x1_u32r))
+  + ((int32_t)16384)) >> 15) * (((((((v_x1_u32r * ((int32_t)tp.digH6)) >> 10) * (((v_x1_u32r *((int32_t)tp.digH3)) >> 11)
+  + ((int32_t)32768))) >> 10) + ((int32_t)2097152)) * ((int32_t)tp.digH2) + 8192) >> 14));
+  v_x1_u32r = (v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * ((int32_t)tp.digH1)) >> 4));
+  v_x1_u32r = (v_x1_u32r < 0 ? 0 : v_x1_u32r);
+  v_x1_u32r = (v_x1_u32r > 419430400 ? 419430400 : v_x1_u32r);
+  return (uint32_t) (v_x1_u32r >> 12);
+}
+
+double getTemperature(int32_t inTemp) {
+  return (double)inTemp / 100.0;
+}
+
+double getPressure(uint32_t inPres) {
+  return (double)inPres / 256.0;
+}
+
+double getHumidity(uint32_t inHum) {
+  return (double)inHum / 1024.0;
 }
 
