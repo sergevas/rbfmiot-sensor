@@ -1,9 +1,15 @@
 #include<ESP8266WiFi.h>
 #include <RBFMIOT_BME280.h>
 
-RBFMIOT_BME280 rbfmiotBme280;
+extern "C" {
+  #include "user_interface.h"
+}
 
+const char* ssid = "IoT";
+const char* password = "********";
 char macAddr[12];
+
+RBFMIOT_BME280 rbfmiotBme280;
 
 void setup() {
 //  int8_t id;
@@ -19,7 +25,7 @@ void setup() {
 //  Serial.println(id, HEX);
 //  Serial.println("Reading device id complete...");
   readMACaddr(macAddr);
-  Serial.println(macAddr);
+//  Serial.println(macAddr);
 }
 
 void loop() {
@@ -43,3 +49,8 @@ void readMACaddr(char *macAddr) {
     sprintf(macAddr,"%s%02x", macAddr, macBin[i]);
   }
 }
+
+//TODO: implement this
+void suspendSensor() {
+}
+
