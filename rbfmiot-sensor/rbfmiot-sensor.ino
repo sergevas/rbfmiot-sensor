@@ -7,13 +7,17 @@ extern "C" {
 }
 
 const char* ssid = "IoT";
-//const char* password = "********";
-
-const char *mqttServerName="";
+const char* password = "********";
+const char *mqttServerName="iot.eclipse.org";
 const uint8_t mqttServerPort = 1883;
 char macAddr[12];
+char telemTopicTemperature[28];
+char telemTopicPressure[25];
+char telemTopicHumidity[25];
 
 RBFMIOT_BME280 rbfmiotBme280;
+WiFiClient wifiClient;
+PubSubClient pubSubClient(wifiClient);
 
 void readMACaddr(char *macAddr);
 void initWiFi();
@@ -27,13 +31,21 @@ void setup() {
 //  Serial.println("Configure start...");
   rbfmiotBme280.configure(SDA_PIN, SCL_PIN);
   initWiFi();
-//  Serial.println("Configure complete...");
 //  rbfmiotBme280.readId(&id);
 //  Serial.print("id 0x");
 //  Serial.println(id, HEX);
 //  Serial.println("Reading device id complete...");
   readMACaddr(macAddr);
-//  Serial.println(macAddr);
+  sprintf(telemTopicPressure, "env/%s/pressure", macAddr);
+  sprintf(telemTopicHumidity, "env/%s/humidity", macAddr);
+  sprintf(telemTopicTemperature, "env/%s/temperature", macAddr);
+  delay(50);
+  Serial.println("Got topic names...");
+  Serial.println(telemTopicTemperature);
+  Serial.println(telemTopicPressure);
+  Serial.println(telemTopicHumidity);
+  pubSubClient.setServer(mqttServerName, mqttServerPort);
+//  Serial.println("Configure complete...");
 }
 
 void loop() {
