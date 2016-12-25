@@ -10,7 +10,15 @@ const char* ssid = "IoT";
 const char* password = "********";
 const char *mqttServerName="iot.eclipse.org";
 const uint8_t mqttServerPort = 1883;
+const char* mqttUsername = "rbfmiotUser";
+const char* mqttPassword = "rbfmiotPasswd";
+const char* statusOn = "on";
+const char* statusOff = "off";
+const int willQoS = 2;
+const boolean willRetain = true;
 char macAddr[12];
+char statusTopic[23];
+char controlTopic[24];
 char telemTopicTemperature[28];
 char telemTopicPressure[25];
 char telemTopicHumidity[25];
@@ -36,11 +44,15 @@ void setup() {
 //  Serial.println(id, HEX);
 //  Serial.println("Reading device id complete...");
   readMACaddr(macAddr);
+  sprintf(statusTopic, "env/%s/status", macAddr);
+  sprintf(statusTopic, "env/%s/control", macAddr);
   sprintf(telemTopicPressure, "env/%s/pressure", macAddr);
   sprintf(telemTopicHumidity, "env/%s/humidity", macAddr);
   sprintf(telemTopicTemperature, "env/%s/temperature", macAddr);
   delay(50);
   Serial.println("Got topic names...");
+  Serial.println(statusTopic);
+  Serial.println(controlTopic);
   Serial.println(telemTopicTemperature);
   Serial.println(telemTopicPressure);
   Serial.println(telemTopicHumidity);
@@ -51,8 +63,9 @@ void setup() {
 void loop() {
   double temp, pres, hum;
   rbfmiotBme280.readAll(&temp, &pres, &hum);
-  Serial.print("temp=");
+  Serial.print("Publish temp=");
   Serial.print(temp);
+  pubSubClient.publish(telemTopicTemperature, );
   Serial.print("\tpres=");
   Serial.print(pres);
   Serial.print("\thum=");
@@ -84,6 +97,23 @@ void initWiFi() {
   Serial.println(WiFi.localIP());
   Serial.println("WiFi connect complete...");
 }
+
+void reconnect() {
+  while (!pubSubClient.connected()) {
+    Serial.println("Trying to connect to MQTT broker...");
+    if (pubSubClient.connect(macAddr, mqttUsername, mqttPassword, statusTopic, willQoS, willRetain, statusOff)) {
+      Serial.println("Connected to MQTT broker...");
+      pubSubClient.publish(statusTopic, statusOn, true);
+      pubSubClient.subscribe(controlTopic, 1);
+    } else {
+      Serial.print("Unable to connect to MQTT broker! rc=");
+      Serial.println(pubSubClient.state());
+      Serial.println("Will try again in 5 seconds");
+      delay(5000);
+    }
+  }
+}
+
 
 //TODO: implement this
 void suspendSensor() {
