@@ -22,6 +22,8 @@ char controlTopic[24];
 char telemTopicTemperature[28];
 char telemTopicPressure[25];
 char telemTopicHumidity[25];
+double temp, pres, hum;
+byte measData[8];
 
 RBFMIOT_BME280 rbfmiotBme280;
 WiFiClient wifiClient;
@@ -61,15 +63,24 @@ void setup() {
 }
 
 void loop() {
-  double temp, pres, hum;
+  if (!pubSubClient.connected()) {
+    reconnect();
+  }
+  pubSubClient.loop();
   rbfmiotBme280.readAll(&temp, &pres, &hum);
+  
   Serial.print("Publish temp=");
   Serial.print(temp);
-  pubSubClient.publish(telemTopicTemperature, );
+  double2byteArr(temp, measData);
+  pubSubClient.publish(telemTopicTemperature, measData, 8);
   Serial.print("\tpres=");
   Serial.print(pres);
+  double2byteArr(pres, measData);
+  pubSubClient.publish(telemTopicPressure, measData, 8);
   Serial.print("\thum=");
   Serial.print(hum);
+  double2byteArr(hum, measData);
+  pubSubClient.publish(telemTopicHumidity, measData, 8);
   Serial.println();
   delay(2000);
 }
@@ -81,6 +92,15 @@ void readMACaddr(char *macAddr) {
   for (i = 0; i < sizeof(macBin); i++) {
     sprintf(macAddr,"%s%02x", macAddr, macBin[i]);
   }
+}
+
+void double2byteArr(double srcVal, byte *destVal) {
+  union {
+    double aSrcVal;
+    byte aDestVal[8];
+  } double2byteArrUnion;
+  double2byteArrUnion.aSrcVal = srcVal;
+  memcpy(destVal, double2byteArrUnion.aDestVal, 8);
 }
 
 void initWiFi() {
