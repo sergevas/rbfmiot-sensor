@@ -3,8 +3,8 @@
 
 #include <Wire.h>
 
-#define SDA_PIN 14
-#define SCL_PIN 12
+// #define SDA_PIN 14
+// #define SCL_PIN 12
 #define I2C_ADDR_76 0x76
 #define I2C_ADDR_77 0x77
 #define ID_ADDR 0xD0
