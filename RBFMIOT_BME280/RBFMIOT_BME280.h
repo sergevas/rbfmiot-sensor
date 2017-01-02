@@ -5,7 +5,8 @@
 
 #define SDA_PIN 14
 #define SCL_PIN 12
-#define I2C_ADDR 0x76
+#define I2C_ADDR_76 0x76
+#define I2C_ADDR_77 0x77
 #define ID_ADDR 0xD0
 #define CTRL_MEAS_ADDR 0xF4
 #define CTRL_HUM_ADDR 0xF2
@@ -53,10 +54,12 @@ typedef struct {
 class RBFMIOT_BME280 {
   public:
 	RBFMIOT_BME280();
+	RBFMIOT_BME280(int8_t anI2cAddr);
 	void configure(int _SDApin, int _SCLpin);
 	void readId(int8_t *id);
 	void readAll(double *temperature, double *pressure, double *humidity);
   private:
+    int8_t i2cAddr;
 	void write(uint8_t regAddr, uint8_t data);
 	void initForcedMode();
 	RawData burstRead();

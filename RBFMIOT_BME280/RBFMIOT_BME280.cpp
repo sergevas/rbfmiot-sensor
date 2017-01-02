@@ -1,6 +1,11 @@
 #include "RBFMIOT_BME280.h"
 
 RBFMIOT_BME280::RBFMIOT_BME280() {
+  i2cAddr = I2C_ADDR_76;
+}
+
+RBFMIOT_BME280::RBFMIOT_BME280(int8_t anI2cAddr) {
+  i2cAddr = anI2cAddr;
 }
 
 void RBFMIOT_BME280::configure(int _SDApin, int _SCLpin) {
@@ -8,7 +13,7 @@ void RBFMIOT_BME280::configure(int _SDApin, int _SCLpin) {
 }
 
 void RBFMIOT_BME280::write(uint8_t regAddr, uint8_t data) {
-  Wire.beginTransmission(I2C_ADDR);
+  Wire.beginTransmission(i2cAddr);
   Wire.write(regAddr);
   Wire.write(data);
   Wire.endTransmission();
@@ -28,10 +33,10 @@ void RBFMIOT_BME280::initForcedMode() {
 
 void RBFMIOT_BME280::readId(int8_t *id) {
   *id = -1; // id is unavailable
-  Wire.beginTransmission(I2C_ADDR);
+  Wire.beginTransmission(i2cAddr);
   Wire.write(ID_ADDR);
   Wire.endTransmission();
-  Wire.requestFrom(I2C_ADDR, 1);
+  Wire.requestFrom(i2cAddr, 1);
   if (Wire.available()) {
     *id = Wire.read();
   }
@@ -42,26 +47,26 @@ TrimmParams RBFMIOT_BME280::readTrimmParams() {
   TrimmParams trimmParams;
   uint8_t trimmParamsArray[32];
   int trimmParamsArrayCount = 0;
-  Wire.beginTransmission(I2C_ADDR);
+  Wire.beginTransmission(i2cAddr);
   Wire.write(DIG_T1_ADDR);
   Wire.endTransmission();
-  Wire.requestFrom(I2C_ADDR, 24);
+  Wire.requestFrom(i2cAddr, 24);
   while (Wire.available()) {
    trimmParamsArray[trimmParamsArrayCount] = Wire.read();
    trimmParamsArrayCount++;
   }
   Wire.endTransmission();
-  Wire.beginTransmission(I2C_ADDR);
+  Wire.beginTransmission(i2cAddr);
   Wire.write(DIG_H1_ADDR);
   Wire.endTransmission();
-  Wire.requestFrom(I2C_ADDR, 1);
+  Wire.requestFrom(i2cAddr, 1);
   trimmParamsArray[trimmParamsArrayCount] = Wire.read();
   trimmParamsArrayCount++;
   Wire.endTransmission();
-  Wire.beginTransmission(I2C_ADDR);
+  Wire.beginTransmission(i2cAddr);
   Wire.write(DIG_H2_ADDR);
   Wire.endTransmission();
-  Wire.requestFrom(I2C_ADDR, 7);
+  Wire.requestFrom(i2cAddr, 7);
   while (Wire.available()) {
    trimmParamsArray[trimmParamsArrayCount] = Wire.read();
    trimmParamsArrayCount++;
@@ -92,10 +97,10 @@ RawData RBFMIOT_BME280::burstRead() {
   RawData rawData;
   uint8_t rawDataArray[8];
   int rawDataArrayCount = 0;
-  Wire.beginTransmission(I2C_ADDR);
+  Wire.beginTransmission(i2cAddr);
   Wire.write(PRES_MSB_ADDR);
   Wire.endTransmission();
-  Wire.requestFrom(I2C_ADDR, 8);
+  Wire.requestFrom(i2cAddr, 8);
   while (Wire.available()) {
    rawDataArray[rawDataArrayCount] = Wire.read();
    rawDataArrayCount++;
