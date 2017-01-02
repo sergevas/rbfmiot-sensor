@@ -1,8 +1,13 @@
+#include<ESP8266WiFi.h>
 #include <RBFMIOT_BME280.h>
 
 RBFMIOT_BME280 rbfmiotBme280;
 
+char macAddr[12];
+
 void setup() {
+  int8_t id;
+  
   Serial.begin(115200);
   Serial.println();
   Serial.println();
@@ -10,11 +15,13 @@ void setup() {
   rbfmiotBme280.configure(SDA_PIN, SCL_PIN);
   Serial.println("Configure complete...");
   Serial.println("Reading device id start...");
-  int8_t id;
+  
   rbfmiotBme280.readId(&id);
   Serial.print("id 0x");
   Serial.println(id, HEX);
   Serial.println("Reading device id complete...");
+  readMACaddr(macAddr);
+  Serial.println(macAddr);
 }
 
 void loop() {
@@ -28,4 +35,13 @@ void loop() {
   Serial.print(hum);
   Serial.println();
   delay(2000);
+}
+
+void readMACaddr(char *macAddr) {
+  int i;
+  uint8_t macBin[6];
+  WiFi.macAddress(macBin);
+  for (i = 0; i < sizeof(macBin); i++) {
+    sprintf(macAddr,"%s%02x", macAddr, macBin[i]);
+  }
 }
