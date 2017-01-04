@@ -10,6 +10,8 @@ RBFMIOT_BME280::RBFMIOT_BME280(int8_t anI2cAddr) {
 
 void RBFMIOT_BME280::configure(int _SDApin, int _SCLpin) {
   Wire.begin(_SDApin, _SCLpin);
+  initForcedMode();
+  tp = readTrimmParams();
 }
 
 void RBFMIOT_BME280::write(uint8_t regAddr, uint8_t data) {
@@ -21,8 +23,8 @@ void RBFMIOT_BME280::write(uint8_t regAddr, uint8_t data) {
 
 void RBFMIOT_BME280::initForcedMode() {
   uint8_t confg;
-  uint8_t ctrl_meas;
   uint8_t ctrl_hum;
+  write(CTRL_MEAS_ADDR, MODE_SLEEP);
   confg = IIR_FILTER_OFF << 2 | SPI_OFF;
   ctrl_meas = OSRS_T_1 << 5 | OSRS_P_1 << 2 | MODE_FORCED;
   ctrl_hum = OSRS_H_1;
@@ -174,14 +176,11 @@ double RBFMIOT_BME280::getHumidity(uint32_t inHum) {
 
 void RBFMIOT_BME280::readAll(double *temperature, double *pressure, double *humidity) {
   RawData rd;
-  TrimmParams tp;
-  int32_t fineTemp, compensatedTemp;
-  uint32_t compensatedPres, compensatedHum;
-  initForcedMode();
+  int32_t fineTemp;
   rd = burstRead();
-  tp = readTrimmParams();
   fineTemp = getFineTemp(rd, tp);
   *temperature = getTemperature(compensateTemp(fineTemp));
   *pressure = getPressure(compensatePressure(rd, tp, fineTemp));
   *humidity = getHumidity(compensateHumidity(rd, tp, fineTemp));
+  write(CTRL_MEAS_ADDR, ctrl_meas);
 }

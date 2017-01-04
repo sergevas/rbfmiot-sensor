@@ -17,6 +17,7 @@
 #define DIG_T1_ADDR 0x88
 #define DIG_H1_ADDR 0xA1
 #define DIG_H2_ADDR 0xE1
+#define MODE_SLEEP 0x00
 #define MODE_FORCED 0x01
 #define OSRS_H_1 0x01
 #define OSRS_P_1 0x01
@@ -59,7 +60,9 @@ class RBFMIOT_BME280 {
 	void readId(int8_t *id);
 	void readAll(double *temperature, double *pressure, double *humidity);
   private:
+    TrimmParams tp;
     int8_t i2cAddr;
+	uint8_t ctrl_meas;
 	void write(uint8_t regAddr, uint8_t data);
 	void initForcedMode();
 	RawData burstRead();
