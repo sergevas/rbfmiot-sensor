@@ -6,6 +6,8 @@ extern "C" {
   #include "user_interface.h"
 }
 
+const int SDA_PIN = 2;
+const int SCL_PIN = 14;
 const char* ssid = "IoT";
 const char* password = "********";
 
@@ -20,7 +22,7 @@ const char* statusOff = "off";
 
 const String getidCmd = "getid";
 const String activateCmd = "activate";
-const String suspendCmd = "suspend";
+const String suspendCmd = "suspend";  
 
 const int willQoS = 2;
 const boolean willRetain = true;
@@ -32,14 +34,12 @@ char telemTopicTemperature[29];
 char telemTopicPressure[26];
 char telemTopicHumidity[26];
 double temp, pres, hum;
-//byte measData[8];
 
-RBFMIOT_BME280 rbfmiotBme280;
+RBFMIOT_BME280 rbfmiotBme280(I2C_ADDR_77);
 WiFiClient wifiClient;
 PubSubClient pubSubClient(mqttServerName, mqttServerPort, wifiClient);
 
 String readMACaddr();
-void double2byteArr(double srcVal, byte *destVal);
 void initWiFi();
 void reconnect();
 void callback(char *topic, byte *payload, unsigned int length);
