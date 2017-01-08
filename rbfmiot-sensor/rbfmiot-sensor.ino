@@ -6,7 +6,7 @@
 const int SDA_PIN = 2;
 const int SCL_PIN = 14;
 const char* SSID = "IoT";
-const char* PASSWORD = "VeryL0ngPas$wd!2015";
+const char* PASSWORD = "********";
 
 const char *MQTT_SERVER_NAME="192.168.1.80";
 const uint16_t MQTT_SERVER_PORT = 1883;
@@ -14,20 +14,21 @@ const char* MQTT_USER_NAME = "rbfmiotUser";
 const char* MQTT_PASSWORD = "rbfmiotPasswd";
 
 const char* STATUS_ON = "on";
-const char* STATUS_SUSP = "suspended";
+const char* STATUS_SLEEPING = "sleeping";
 const char* STATUS_OFF = "off";
 
-const String CMD_GET_ID = "getid";
-const String CMD_ACTIVATE = "activate";
-const String CMD_SUSP = "suspend";
+const String CMD_GET_SENSOR_ID = "getsensid";
+const String CMD_BATT = "getbattery";
+const String CMD_SET_MODE = "setmode";
 
 const int willQoS = 2;
 const boolean willRetain = true;
 
-const int SUSP_STAT_ADDR = 0;
-const int SLEEP_TIME_VAL_ADDR = SUSP_STAT_ADDR + 1;
+const int MODE_ADDR = 0;
+const int SLEEP_TIME_VAL_ADDR = MODE_ADDR + 1;
 const int SLEEP_TIME_VAL_LENGTH = 4;
-const int WAIT_FOR_COMMAND_TIME = 5;
+const uint32_t WAIT_FOR_COMMAND_MSG_DELAY = 5000;
+const uint32_t ACTIVE_MODE_DELAY = 2000;
 
 char macAddr[12];
 char statusTopic[24];
@@ -37,19 +38,20 @@ char telemTopicTemperature[29];
 char telemTopicPressure[26];
 char telemTopicHumidity[26];
 double temp, pres, hum;
-
-enum SuspStatVal {
-  ON = 1,
-  OFF = 0
+enum Mode {
+  SUSPENDED = '0',
+  ACTIVE = '1',
+  PWR_SAVE = '2'
 };
 
 RBFMIOT_BME280 rbfmiotBme280(I2C_ADDR_76);
 WiFiClient wifiClient;
 PubSubClient pubSubClient(MQTT_SERVER_NAME, MQTT_SERVER_PORT, wifiClient);
+ADC_MODE(ADC_VCC);
 
 String readMACaddr();
 void initWiFi();
-void preprocessStatus();
+void preprocessMode();
 void reconnect();
 void callback(char *topic, byte *payload, unsigned int length);
 void handleCommand(char *command);
@@ -68,9 +70,6 @@ void setup() {
   (String("env/" + macAddrStr + "/status")).toCharArray(statusTopic, 24);
   (String("env/" + macAddrStr + "/request")).toCharArray(requestTopic, 25);
   (String("env/" + macAddrStr + "/reply")).toCharArray(replyTopic, 23);
-  
-  preprocessStatus();
-  
   (String("env/" + macAddrStr + "/pressure")).toCharArray(telemTopicPressure, 26);
   (String("env/" + macAddrStr + "/humidity")).toCharArray(telemTopicHumidity, 26);
   (String("env/" + macAddrStr + "/temperature")).toCharArray(telemTopicTemperature, 29);
@@ -82,14 +81,20 @@ void setup() {
   Serial.println(telemTopicPressure);
   Serial.println(telemTopicHumidity);
   Serial.println("Configure complete...");
+  preprocessMode();
 }
 
 void loop() {
-  char *measVal;
   if (!pubSubClient.connected()) {
     reconnect();
   }
+  execMeasur();
   pubSubClient.loop();
+  delay(ACTIVE_MODE_DELAY);
+}
+
+void execMeasur() {
+  char *measVal;
   rbfmiotBme280.readAll(&temp, &pres, &hum);
   Serial.print("Publish temp="); Serial.print(temp);
   measVal = getValAsString(temp);
@@ -98,12 +103,10 @@ void loop() {
   Serial.print("\tpres="); Serial.print(pres);
   measVal = getValAsString(pres);
   pubSubClient.publish(telemTopicPressure, measVal);
-  free(measVal); Serial.print("\thum="); Serial.print(hum);
+  free(measVal); Serial.print("\thum="); Serial.println(hum);
   measVal = getValAsString(hum);
   pubSubClient.publish(telemTopicHumidity, measVal);
   free(measVal);
-  Serial.println();
-  delay(2000);
 }
 
 char *getValAsString(double aVal) {
@@ -160,16 +163,16 @@ void callback(char *topic, byte *payload, unsigned int length) {
     command += String((char)payload[i]);
   }
   Serial.print("command="); Serial.println(command);
-  if (command.startsWith(CMD_GET_ID)) {
-    handleGetId();
-  } else if (command.startsWith(CMD_SUSP)) {
-    handleSuspend(command);
-  } else if (command.startsWith(CMD_ACTIVATE)) {
-    handleActivate();
+  if (command.startsWith(CMD_GET_SENSOR_ID)) {
+    handleGetSensId();
+  } else if (command.startsWith(CMD_BATT)) {
+    handleGetBattery();
+  } else if (command.startsWith(CMD_SET_MODE)) {
+    handleSetMode(command);
   }
 }
 
-void handleGetId() {
+void handleGetSensId() {
   int8_t id;
   char idArr[3];
   rbfmiotBme280.readId(&id);
@@ -178,57 +181,80 @@ void handleGetId() {
   pubSubClient.publish(replyTopic, idArr);
 }
 
-void handleSuspend(String command) {
-  long sleepTime;
-  int cmdLength = CMD_SUSP.length();
-  String strVal = command.substring(cmdLength + 1);
-  sleepTime = sleepTimeToMcSec(strVal);
-  pubSubClient.publish(statusTopic, STATUS_SUSP);
-  updateSuspendedFlag(ON);
-  updateSleepTime(strVal);
-  Serial.print("Sleep for ["); Serial.print(sleepTime); Serial.println("] mcs");
-  ESP.deepSleep(sleepTime);
+void handleGetBattery() {
+  uint32_t vcc;
+  char vccArr[5];
+  vcc = ESP.getVcc();
+  Serial.print("vcc="); Serial.println(vcc);
+  String vccStr = String(vcc);
+  vccStr.toCharArray(vccArr, 5);
+  pubSubClient.publish(replyTopic, vccArr);
 }
 
-void handleActivate() {
-  updateSuspendedFlag(OFF);
-  ESP.restart();
+void handleSetMode(String command) {
+  Serial.println("handleSetMode() start...");
+  int cmdLength = CMD_SET_MODE.length();
+  char modeVal = command.charAt(cmdLength + 1);
+  Serial.print("modeVal="); Serial.println(modeVal);
+  if (modeVal == ACTIVE) {
+    updateModeVal(ACTIVE);
+    ESP.restart();
+  } else if (modeVal == SUSPENDED || modeVal == PWR_SAVE) {
+    String sleepTimeStr = command.substring(cmdLength + 3);
+    long sleepTime = sleepTimeToMcSec(sleepTimeStr);
+    if (modeVal == PWR_SAVE) {
+      execMeasur();
+    }
+    pubSubClient.publish(statusTopic, STATUS_SLEEPING);
+    updateModeVal((Mode)modeVal);
+    updateSleepTime(sleepTimeStr);
+    Serial.print("Sleep for ["); Serial.print(sleepTime); Serial.println("] mcs");
+    ESP.deepSleep(sleepTime);
+  }
 }
 
-void preprocessStatus() {
-   Serial.println("preprocessStatus() start...");
-  if (ON == readSuspendedFlag()) {
-    Serial.println("Suspend start...");
-    if (!pubSubClient.connected()) {
+void preprocessMode() {
+   Serial.println("preprocessMode() start...");
+   if (!pubSubClient.connected()) {
       reconnect();
     }
-    Serial.println("ESP.deepSleep() start...");
-    long currStMcS = sleepTimeToMcSec(readSleepTime());
-    delay(WAIT_FOR_COMMAND_TIME);
+   Mode mode = readModeVal();
+   if (mode == PWR_SAVE) {
+     execMeasur();
+   }
+   if (mode == PWR_SAVE || mode == SUSPENDED) {
+    Serial.println("Waiting for command msg start...");
+    delay(WAIT_FOR_COMMAND_MSG_DELAY);
+    Serial.println("Waiting for command msg complete...");
     pubSubClient.loop();
     pubSubClient.loop();
-    pubSubClient.publish(statusTopic, STATUS_SUSP);
-    ESP.deepSleep(currStMcS);
-    Serial.println("ESP.deepSleep() complete...");
-    
+    long sleepTime = sleepTimeToMcSec(readSleepTime());
+    pubSubClient.publish(statusTopic, STATUS_SLEEPING);
+    Serial.print("Sleep for ["); Serial.print(sleepTime); Serial.println("] mcs");
+    ESP.deepSleep(sleepTime);
   }
-  Serial.println("preprocessStatus() complete...");
+  Serial.println("preprocessMode() complete...");
 }
 
-SuspStatVal readSuspendedFlag() {
-  Serial.println("readSuspendedFlag() start...");
-  uint8_t flagVal = EEPROM.read(SUSP_STAT_ADDR);
-  Serial.print("flagVal="); Serial.println(flagVal);
-  Serial.println("readSuspendedFlag() complete...");
-  return flagVal == ON ? ON : OFF;
+Mode readModeVal() {
+  Serial.println("readModeVal() start...");
+  Mode mode;
+  char modeVal = char(EEPROM.read(MODE_ADDR));
+  Serial.print("modeVal="); Serial.println(modeVal);
+  if (modeVal == SUSPENDED) {
+    mode = SUSPENDED;
+  } else if (modeVal == ACTIVE) {
+    mode = ACTIVE;
+  } else {
+    mode = PWR_SAVE;
+  }
+  Serial.println("readModeVal() complete...");
+  return mode;
 }
 
-void updateSuspendedFlag(SuspStatVal flagVal) {
-  Serial.println("updateSuspendedFlag() start...");
-  Serial.print("flagVal="); Serial.println(flagVal);
-  EEPROM.write(SUSP_STAT_ADDR, flagVal);
+void updateModeVal(Mode mode) {
+  EEPROM.write(MODE_ADDR, mode);
   EEPROM.commit();
-  Serial.println("updateSuspendedFlag() complete...");
 }
 
 String readSleepTime() {
