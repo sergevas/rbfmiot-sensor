@@ -6,7 +6,7 @@
 const int SDA_PIN = 2;
 const int SCL_PIN = 14;
 const char* SSID = "IoT";
-const char* PASSWORD = "********";
+const char* PASSWORD = "VeryL0ngPas$wd!2015";
 
 const char* MQTT_SERVER_NAME="192.168.1.80";
 const uint16_t MQTT_SERVER_PORT = 1883;
@@ -32,6 +32,7 @@ const int SLEEP_TIME_VAL_LENGTH = 4;
 const uint32_t WAIT_FOR_COMMAND_MSG_DELAY = 5000;
 const uint32_t ACTIVE_MODE_DELAY = 2000;
 const char COMMA = ',';
+const String EMPT_STR = "";
 
 enum Mode {
   SUSPENDED = '0',
@@ -181,7 +182,7 @@ void callback(char *topic, byte *payload, unsigned int length) {
     requestCmdMsg += String((char)payload[i]);
   }
   Serial.print("requestCmdMsg="); Serial.println(requestCmdMsg);
-  parseRequestCmdMsg(requestCmdMsg);
+  parseCmdRequestMsg(requestCmdMsg);
   if (cmdRequestMsg.command.equals(CMD_GET_SENSOR_ID)) {
     handleGetSensId();
   } else if (cmdRequestMsg.command.equals(CMD_BATT)) {
@@ -191,7 +192,11 @@ void callback(char *topic, byte *payload, unsigned int length) {
   }
 }
 
-void parseRequestCmdMsg(String aCommand) {
+void parseCmdRequestMsg(String aCommand) {
+  Serial.println("parseCmdRequestMsg() start...");
+  cmdRequestMsg.msgId = EMPT_STR;
+  cmdRequestMsg.command = EMPT_STR;
+  cmdRequestMsg.params = EMPT_STR;
   int sepIdxBeg = 0, sepIdxEnd;
   sepIdxEnd = aCommand.indexOf(COMMA);
   cmdRequestMsg.msgId = aCommand.substring(sepIdxBeg, sepIdxEnd);
@@ -204,17 +209,30 @@ void parseRequestCmdMsg(String aCommand) {
     sepIdxBeg = sepIdxEnd + 1;
     cmdRequestMsg.params = aCommand.substring(sepIdxBeg);
   }
+  Serial.print("cmdRequestMsg.msgId="); Serial.println(cmdRequestMsg.msgId);
+  Serial.print("cmdRequestMsg.command="); Serial.println(cmdRequestMsg.command);
+  Serial.print("cmdRequestMsg.params="); Serial.println(cmdRequestMsg.params);
+  Serial.println("parseCmdRequestMsg() complete...");
 }
 
 void createAndPublishReplyMsg() {
-  String repMsgStr = cmdReplyMsg.correlId
-    + COMMA
-    + cmdReplyMsg.status
-    + (cmdReplyMsg.payload.length() > 0) ? (COMMA + cmdReplyMsg.payload) : "";
-  int repLength = repMsgStr.length();
+  Serial.println("createAndPublishReplyMsg() start...");
+  Serial.print("cmdReplyMsg.correlId="); Serial.println(cmdReplyMsg.correlId);
+  Serial.print("cmdReplyMsg.status="); Serial.println(cmdReplyMsg.status);
+  Serial.print("cmdReplyMsg.payload="); Serial.println(cmdReplyMsg.payload);
+  String repMsgStr = cmdReplyMsg.correlId + COMMA + cmdReplyMsg.status;
+  if (cmdReplyMsg.payload.length() > 0) {
+    repMsgStr += (COMMA + cmdReplyMsg.payload);
+  }
+  int repLength = repMsgStr.length() + 1;
   char reply[repLength];
+  Serial.print("repMsgStr=");Serial.println(repMsgStr);
   repMsgStr.toCharArray(reply, repLength);
   pubSubClient.publish(replyTopic, reply);
+  cmdReplyMsg.correlId = EMPT_STR;
+  cmdReplyMsg.status = EMPT_STR;
+  cmdReplyMsg.payload = EMPT_STR;
+  Serial.println("createAndPublishReplyMsg() complete...");
 }
 
 void handleGetSensId() {
