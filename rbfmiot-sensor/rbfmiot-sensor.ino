@@ -5,10 +5,10 @@
 
 const int SDA_PIN = 2;
 const int SCL_PIN = 14;
-const char* SSID = "IoT";
-const char* PASSWORD = "VeryL0ngPas$wd!2015";
+const char* SSID = "RBFMIOT";
+const char* PASSWORD = "StrongPasswd";
 
-const char* MQTT_SERVER_NAME="192.168.1.80";
+const char* MQTT_SERVER_NAME="172.16.1.1";
 const uint16_t MQTT_SERVER_PORT = 1883;
 const char* MQTT_USER_NAME = "rbfmiotUser";
 const char* MQTT_PASSWORD = "rbfmiotPasswd";
@@ -31,6 +31,9 @@ const int SLEEP_TIME_VAL_ADDR = MODE_ADDR + 1;
 const int SLEEP_TIME_VAL_LENGTH = 4;
 const uint32_t WAIT_FOR_COMMAND_MSG_DELAY = 5000;
 const uint32_t ACTIVE_MODE_DELAY = 2000;
+const uint32_t NETWORK_ERROR_RECOVERY_DELAY = 600000000;
+const int WIFI_NUM_OF_RETRIES = 20;
+const int MQTT_NUM_OF_RETRIES = 3;
 const char COMMA = ',';
 const String EMPT_STR = "";
 
@@ -151,7 +154,15 @@ void initWiFi() {
   Serial.println();
   Serial.println("WiFi connect start...");
   WiFi.begin(SSID, PASSWORD);
+  int retriesCount = 0;
   while (WiFi.status() != WL_CONNECTED) {
+    retriesCount++;
+    if (retriesCount > WIFI_NUM_OF_RETRIES) {
+      Serial.println();
+      Serial.print("Max number of retries for WiFi exceeded "); Serial.println(WIFI_NUM_OF_RETRIES);
+      Serial.print("Sleeping for "); Serial.println(NETWORK_ERROR_RECOVERY_DELAY);
+      ESP.deepSleep(NETWORK_ERROR_RECOVERY_DELAY);
+    }
     delay(500);
     Serial.print(".");
   }
@@ -162,7 +173,15 @@ void initWiFi() {
 }
 
 void reconnect() {
+  int retriesCount = 0;
   while (!pubSubClient.connected()) {
+    retriesCount++;
+    if (retriesCount > MQTT_NUM_OF_RETRIES) {
+      Serial.println();
+      Serial.print("Max number of retries for MQTT exceeded "); Serial.println(MQTT_NUM_OF_RETRIES);
+      Serial.print("Sleeping for "); Serial.println(NETWORK_ERROR_RECOVERY_DELAY);
+      ESP.deepSleep(NETWORK_ERROR_RECOVERY_DELAY);
+    }
     Serial.println("Trying to connect to MQTT broker...");
     if (pubSubClient.connect(macAddr, MQTT_USER_NAME, MQTT_PASSWORD, statusTopic, willQoS, willRetain, STATUS_OFF)) {
       Serial.println("Connected to MQTT broker...");
