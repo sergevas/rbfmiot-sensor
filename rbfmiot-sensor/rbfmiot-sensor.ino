@@ -79,8 +79,8 @@ void callback(char *topic, byte *payload, unsigned int length);
 void handleCommand(char *command);
 
 void setup() {
-  String macAddrStr = readMACaddr();
   Serial.begin(115200);
+  String macAddrStr = readMACaddr();
   Serial.println();
   Serial.println();
   Serial.println("Configure start...");
@@ -143,9 +143,11 @@ String readMACaddr() {
   int i;
   uint8_t macBin[6];
   String macStr;
+  String byt;
   WiFi.macAddress(macBin);
   for (i = 0; i < 6; i++) {
-    macStr += String(macBin[i], HEX);
+    byt = String(macBin[i], HEX);
+    macStr = byt.length() == 1 ? macStr + "0" + byt : macStr + byt;
   }
   return macStr;
 }
