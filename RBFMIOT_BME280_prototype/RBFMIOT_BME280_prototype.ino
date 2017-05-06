@@ -103,7 +103,7 @@ void configure(int _SDApin, int _SCLpin) {
 }
 
 void initForcedMode() {
-   uint8_t confg;
+  uint8_t confg;
   uint8_t ctrl_meas;
   uint8_t ctrl_hum;
   confg = IIR_FILTER_OFF << 2 | SPI_OFF;
