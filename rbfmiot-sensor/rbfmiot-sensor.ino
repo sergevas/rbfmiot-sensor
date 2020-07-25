@@ -7,8 +7,8 @@
 
 const int SDA_PIN = 2;
 const int SCL_PIN = 14;
-const char* SSID = "IoT";
-const char* PASSWORD = "VeryL0ngPas$wd!2015";
+const char* SSID = "ssid";
+const char* PASSWORD = "passwd";
 
 //const char* MQTT_SERVER_NAME="172.16.1.1";
 //const uint16_t MQTT_SERVER_PORT = 1883;
