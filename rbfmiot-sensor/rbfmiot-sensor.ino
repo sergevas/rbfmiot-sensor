@@ -1,30 +1,33 @@
 #include<ESP8266WiFi.h>
 #include <EEPROM.h>
 #include <RBFMIOT_BME280.h>
-#include "PubSubClient.h"
+#include <ESP8266WebServer.h>
+#include <ArduinoJson.h>
+//#include "PubSubClient.h"
 
 const int SDA_PIN = 2;
 const int SCL_PIN = 14;
-const char* SSID = "RBFMIOT";
-const char* PASSWORD = "StrongPasswd";
+const char* SSID = "IoT";
+const char* PASSWORD = "VeryL0ngPas$wd!2015";
 
-const char* MQTT_SERVER_NAME="172.16.1.1";
-const uint16_t MQTT_SERVER_PORT = 1883;
-const char* MQTT_USER_NAME = "rbfmiotUser";
-const char* MQTT_PASSWORD = "rbfmiotPasswd";
+//const char* MQTT_SERVER_NAME="172.16.1.1";
+//const uint16_t MQTT_SERVER_PORT = 1883;
+//const char* MQTT_USER_NAME = "rbfmiotUser";
+//const char* MQTT_PASSWORD = "rbfmiotPasswd";
 
 const char* STATUS_ON = "on";
 const char* STATUS_SLEEPING = "sleeping";
 const char* STATUS_OFF = "off";
 
 const char* REPLY_STATUS_OK = "200";
+const char* CONTENT_TYPE = "application/json";
 
-const String CMD_GET_SENSOR_ID = "getsensid";
-const String CMD_BATT = "getbattery";
-const String CMD_SET_MODE = "setmode";
+const String RES_SENSOR_ID = "/sensid";
+const String RES_BATT = "/battery";
+const String RES_MODE = "/mode";
 
-const int willQoS = 2;
-const boolean willRetain = true;
+//const int willQoS = 2;
+//const boolean willRetain = true;
 
 const int MODE_ADDR = 0;
 const int SLEEP_TIME_VAL_ADDR = MODE_ADDR + 1;
@@ -33,7 +36,7 @@ const uint32_t WAIT_FOR_COMMAND_MSG_DELAY = 5000;
 const uint32_t ACTIVE_MODE_DELAY = 2000;
 const uint32_t NETWORK_ERROR_RECOVERY_DELAY = 600000000;
 const int WIFI_NUM_OF_RETRIES = 20;
-const int MQTT_NUM_OF_RETRIES = 3;
+//const int MQTT_NUM_OF_RETRIES = 3;
 const char COMMA = ',';
 const String EMPT_STR = "";
 
@@ -50,106 +53,69 @@ typedef struct {
 } cmdRequestMsg_t;
 
 typedef struct {
-  String correlId;
+  String contentType;
   String status;
   String payload;
 } cmdReplyMsg_t;
 
-char macAddr[12];
-char statusTopic[24];
-char requestTopic[25];
-char replyTopic[23];
-char telemTopicTemperature[29];
-char telemTopicPressure[26];
-char telemTopicHumidity[26];
+//char macAddr[12];
+//char statusTopic[24];
+//char requestTopic[25];
+//char replyTopic[23];
+//char telemTopicTemperature[29];
+//char telemTopicPressure[26];
+//char telemTopicHumidity[26];
 double temp, pres, hum;
 cmdRequestMsg_t cmdRequestMsg;
 cmdReplyMsg_t cmdReplyMsg;
 
 RBFMIOT_BME280 rbfmiotBme280(I2C_ADDR_76);
 WiFiClient wifiClient;
-PubSubClient pubSubClient(MQTT_SERVER_NAME, MQTT_SERVER_PORT, wifiClient);
+ESP8266WebServer webServer;
 ADC_MODE(ADC_VCC);
 
-String readMACaddr();
+//String readMACaddr();
 void initWiFi();
 void preprocessMode();
-void reconnect();
-void callback(char *topic, byte *payload, unsigned int length);
-void handleCommand(char *command);
+//void reconnect();
+//void callback(char *topic, byte *payload, unsigned int length);
 
 void setup() {
   Serial.begin(115200);
-  String macAddrStr = readMACaddr();
+//  String macAddrStr = readMACaddr();
   Serial.println();
   Serial.println();
   Serial.println("Configure start...");
   rbfmiotBme280.configure(SDA_PIN, SCL_PIN);
   EEPROM.begin(5);
   initWiFi();
-  pubSubClient.setCallback(callback);
-  macAddrStr.toCharArray(macAddr, 12);
-  (String("env/" + macAddrStr + "/status")).toCharArray(statusTopic, 24);
-  (String("env/" + macAddrStr + "/request")).toCharArray(requestTopic, 25);
-  (String("env/" + macAddrStr + "/reply")).toCharArray(replyTopic, 23);
-  (String("env/" + macAddrStr + "/pressure")).toCharArray(telemTopicPressure, 26);
-  (String("env/" + macAddrStr + "/humidity")).toCharArray(telemTopicHumidity, 26);
-  (String("env/" + macAddrStr + "/temperature")).toCharArray(telemTopicTemperature, 29);
-  Serial.println("Got topic names...");
-  Serial.println(statusTopic);
-  Serial.println(requestTopic);
-  Serial.println(replyTopic);
-  Serial.println(telemTopicTemperature);
-  Serial.println(telemTopicPressure);
-  Serial.println(telemTopicHumidity);
+//  pubSubClient.setCallback(callback);
+//  macAddrStr.toCharArray(macAddr, 12);
+//  (String("env/" + macAddrStr + "/status")).toCharArray(statusTopic, 24);
+//  (String("env/" + macAddrStr + "/request")).toCharArray(requestTopic, 25);
+//  (String("env/" + macAddrStr + "/reply")).toCharArray(replyTopic, 23);
+//  (String("env/" + macAddrStr + "/pressure")).toCharArray(telemTopicPressure, 26);
+//  (String("env/" + macAddrStr + "/humidity")).toCharArray(telemTopicHumidity, 26);
+//  (String("env/" + macAddrStr + "/temperature")).toCharArray(telemTopicTemperature, 29);
+//  Serial.println("Got topic names...");
+//  Serial.println(statusTopic);
+//  Serial.println(requestTopic);
+//  Serial.println(replyTopic);
+//  Serial.println(telemTopicTemperature);
+//  Serial.println(telemTopicPressure);
+//  Serial.println(telemTopicHumidity);
   Serial.println("Configure complete...");
-  preprocessMode();
+//  preprocessMode();
 }
 
 void loop() {
-  if (!pubSubClient.connected()) {
-    reconnect();
-  }
-  execMeasur();
-  pubSubClient.loop();
-  delay(ACTIVE_MODE_DELAY);
-}
-
-void execMeasur() {
-  char *measVal;
-  rbfmiotBme280.readAll(&temp, &pres, &hum);
-  Serial.print("Publish temp="); Serial.print(temp);
-  measVal = getValAsString(temp);
-  pubSubClient.publish(telemTopicTemperature, measVal);
-  free(measVal);
-  Serial.print("\tpres="); Serial.print(pres);
-  measVal = getValAsString(pres);
-  pubSubClient.publish(telemTopicPressure, measVal);
-  free(measVal); Serial.print("\thum="); Serial.println(hum);
-  measVal = getValAsString(hum);
-  pubSubClient.publish(telemTopicHumidity, measVal);
-  free(measVal);
-}
-
-char *getValAsString(double aVal) {
-  String strVal = String(aVal, 2);
-  int strValLength = strVal.length() + 1;
-  char *strValArr = (char*)malloc(strValLength);
-  strVal.toCharArray(strValArr, strValLength);
-  return strValArr;
-}
-
-String readMACaddr() {
-  int i;
-  uint8_t macBin[6];
-  String macStr;
-  String byt;
-  WiFi.macAddress(macBin);
-  for (i = 0; i < 6; i++) {
-    byt = String(macBin[i], HEX);
-    macStr = byt.length() == 1 ? macStr + "0" + byt : macStr + byt;
-  }
-  return macStr;
+  webServer.handleClient();
+//  if (!pubSubClient.connected()) {
+//    reconnect();
+//  }
+//  execMeasur();
+//  pubSubClient.loop();
+//  delay(ACTIVE_MODE_DELAY);
 }
 
 void initWiFi() {
@@ -174,44 +140,95 @@ void initWiFi() {
   Serial.println("WiFi connect complete...");
 }
 
-void reconnect() {
-  int retriesCount = 0;
-  while (!pubSubClient.connected()) {
-    retriesCount++;
-    if (retriesCount > MQTT_NUM_OF_RETRIES) {
-      Serial.println();
-      Serial.print("Max number of retries for MQTT exceeded "); Serial.println(MQTT_NUM_OF_RETRIES);
-      Serial.print("Sleeping for "); Serial.println(NETWORK_ERROR_RECOVERY_DELAY);
-      ESP.deepSleep(NETWORK_ERROR_RECOVERY_DELAY);
-    }
-    Serial.println("Trying to connect to MQTT broker...");
-    if (pubSubClient.connect(macAddr, MQTT_USER_NAME, MQTT_PASSWORD, statusTopic, willQoS, willRetain, STATUS_OFF)) {
-      Serial.println("Connected to MQTT broker...");
-      pubSubClient.publish(statusTopic, STATUS_ON, true);
-      pubSubClient.subscribe(requestTopic, 1);
-    } else {
-      Serial.print("Unable to connect to MQTT broker! rc="); Serial.println(pubSubClient.state()); Serial.println("Will try again in 5 seconds");
-      delay(5000);
-    }
-  }
+void handleRoot() {
+  Serial.println();
+  Serial.println("handleRoot() start...");
+  
+  Serial.println("handleRoot() complete...");
+}
+String createJson(String key, String value) {
+  return "{"
+         + "\"" + key + "\"" + ":" + "\"" + value + "\""
+       + "}";
 }
 
-void callback(char *topic, byte *payload, unsigned int length) {
-  int i;
-  String requestCmdMsg;
-  for (i = 0; i < length; i++) {
-    requestCmdMsg += String((char)payload[i]);
-  }
-  Serial.print("requestCmdMsg="); Serial.println(requestCmdMsg);
-  parseCmdRequestMsg(requestCmdMsg);
-  if (cmdRequestMsg.command.equals(CMD_GET_SENSOR_ID)) {
-    handleGetSensId();
-  } else if (cmdRequestMsg.command.equals(CMD_BATT)) {
-    handleGetBattery();
-  } else if (cmdRequestMsg.command.equals(CMD_SET_MODE)) {
-    handleSetMode();
-  }
+
+
+//void execMeasur() {
+//  char *measVal;
+//  rbfmiotBme280.readAll(&temp, &pres, &hum);
+//  Serial.print("Publish temp="); Serial.print(temp);
+//  measVal = getValAsString(temp);
+//  pubSubClient.publish(telemTopicTemperature, measVal);
+//  free(measVal);
+//  Serial.print("\tpres="); Serial.print(pres);
+//  measVal = getValAsString(pres);
+//  pubSubClient.publish(telemTopicPressure, measVal);
+//  free(measVal); Serial.print("\thum="); Serial.println(hum);
+//  measVal = getValAsString(hum);
+//  pubSubClient.publish(telemTopicHumidity, measVal);
+//  free(measVal);
+//}
+
+char *getValAsString(double aVal) {
+  String strVal = String(aVal, 2);
+  int strValLength = strVal.length() + 1;
+  char *strValArr = (char*)malloc(strValLength);
+  strVal.toCharArray(strValArr, strValLength);
+  return strValArr;
 }
+
+//String readMACaddr() {
+//  int i;
+//  uint8_t macBin[6];
+//  String macStr;
+//  String byt;
+//  WiFi.macAddress(macBin);
+//  for (i = 0; i < 6; i++) {
+//    byt = String(macBin[i], HEX);
+//    macStr = byt.length() == 1 ? macStr + "0" + byt : macStr + byt;
+//  }
+//  return macStr;
+//}
+
+//void reconnect() {
+//  int retriesCount = 0;
+//  while (!pubSubClient.connected()) {
+//    retriesCount++;
+//    if (retriesCount > MQTT_NUM_OF_RETRIES) {
+//      Serial.println();
+//      Serial.print("Max number of retries for MQTT exceeded "); Serial.println(MQTT_NUM_OF_RETRIES);
+//      Serial.print("Sleeping for "); Serial.println(NETWORK_ERROR_RECOVERY_DELAY);
+//      ESP.deepSleep(NETWORK_ERROR_RECOVERY_DELAY);
+//    }
+//    Serial.println("Trying to connect to MQTT broker...");
+//    if (pubSubClient.connect(macAddr, MQTT_USER_NAME, MQTT_PASSWORD, statusTopic, willQoS, willRetain, STATUS_OFF)) {
+//      Serial.println("Connected to MQTT broker...");
+//      pubSubClient.publish(statusTopic, STATUS_ON, true);
+//      pubSubClient.subscribe(requestTopic, 1);
+//    } else {
+//      Serial.print("Unable to connect to MQTT broker! rc="); Serial.println(pubSubClient.state()); Serial.println("Will try again in 5 seconds");
+//      delay(5000);
+//    }
+//  }
+//}
+
+//void callback(char *topic, byte *payload, unsigned int length) {
+//  int i;
+//  String requestCmdMsg;
+//  for (i = 0; i < length; i++) {
+//    requestCmdMsg += String((char)payload[i]);
+//  }
+//  Serial.print("requestCmdMsg="); Serial.println(requestCmdMsg);
+//  parseCmdRequestMsg(requestCmdMsg);
+//  if (cmdRequestMsg.command.equals(CMD_GET_SENSOR_ID)) {
+//    handleGetSensId();
+//  } else if (cmdRequestMsg.command.equals(CMD_BATT)) {
+//    handleGetBattery();
+//  } else if (cmdRequestMsg.command.equals(CMD_SET_MODE)) {
+//    handleSetMode();
+//  }
+//}
 
 void parseCmdRequestMsg(String aCommand) {
   Serial.println("parseCmdRequestMsg() start...");
@@ -236,25 +253,25 @@ void parseCmdRequestMsg(String aCommand) {
   Serial.println("parseCmdRequestMsg() complete...");
 }
 
-void createAndPublishReplyMsg() {
-  Serial.println("createAndPublishReplyMsg() start...");
-  Serial.print("cmdReplyMsg.correlId="); Serial.println(cmdReplyMsg.correlId);
-  Serial.print("cmdReplyMsg.status="); Serial.println(cmdReplyMsg.status);
-  Serial.print("cmdReplyMsg.payload="); Serial.println(cmdReplyMsg.payload);
-  String repMsgStr = cmdReplyMsg.correlId + COMMA + cmdReplyMsg.status;
-  if (cmdReplyMsg.payload.length() > 0) {
-    repMsgStr += (COMMA + cmdReplyMsg.payload);
-  }
-  int repLength = repMsgStr.length() + 1;
-  char reply[repLength];
-  Serial.print("repMsgStr=");Serial.println(repMsgStr);
-  repMsgStr.toCharArray(reply, repLength);
-  pubSubClient.publish(replyTopic, reply);
-  cmdReplyMsg.correlId = EMPT_STR;
-  cmdReplyMsg.status = EMPT_STR;
-  cmdReplyMsg.payload = EMPT_STR;
-  Serial.println("createAndPublishReplyMsg() complete...");
-}
+//void createAndPublishReplyMsg() {
+//  Serial.println("createAndPublishReplyMsg() start...");
+//  Serial.print("cmdReplyMsg.correlId="); Serial.println(cmdReplyMsg.correlId);
+//  Serial.print("cmdReplyMsg.status="); Serial.println(cmdReplyMsg.status);
+//  Serial.print("cmdReplyMsg.payload="); Serial.println(cmdReplyMsg.payload);
+//  String repMsgStr = cmdReplyMsg.correlId + COMMA + cmdReplyMsg.status;
+//  if (cmdReplyMsg.payload.length() > 0) {
+//    repMsgStr += (COMMA + cmdReplyMsg.payload);
+//  }
+//  int repLength = repMsgStr.length() + 1;
+//  char reply[repLength];
+//  Serial.print("repMsgStr=");Serial.println(repMsgStr);
+//  repMsgStr.toCharArray(reply, repLength);
+//  pubSubClient.publish(replyTopic, reply);
+//  cmdReplyMsg.correlId = EMPT_STR;
+//  cmdReplyMsg.status = EMPT_STR;
+//  cmdReplyMsg.payload = EMPT_STR;
+//  Serial.println("createAndPublishReplyMsg() complete...");
+//}
 
 void handleGetSensId() {
   int8_t id;
@@ -262,7 +279,7 @@ void handleGetSensId() {
   cmdReplyMsg.correlId = cmdRequestMsg.msgId;
   cmdReplyMsg.status = REPLY_STATUS_OK;
   cmdReplyMsg.payload = String(id, HEX);
-  createAndPublishReplyMsg();
+//  createAndPublishReplyMsg();
 }
 
 void handleGetBattery() {
@@ -272,58 +289,58 @@ void handleGetBattery() {
   cmdReplyMsg.correlId = cmdRequestMsg.msgId;
   cmdReplyMsg.status = REPLY_STATUS_OK;
   cmdReplyMsg.payload = String(vcc);
-  createAndPublishReplyMsg();
+//  createAndPublishReplyMsg();
 }
 
-void handleSetMode() {
-  Serial.println("handleSetMode() start...");
-  char modeVal = cmdRequestMsg.params[0];
-  Serial.print("modeVal="); Serial.println(modeVal);
-  if (modeVal == ACTIVE) {
-    updateModeVal(ACTIVE);
-    cmdReplyMsg.correlId = cmdRequestMsg.msgId;
-    cmdReplyMsg.status = REPLY_STATUS_OK;
-    createAndPublishReplyMsg();
-    ESP.restart();
-  } else if (modeVal == SUSPENDED || modeVal == PWR_SAVE) {
-    String sleepTimeStr = cmdRequestMsg.params.substring(2);
-    long sleepTime = sleepTimeToMcSec(sleepTimeStr);
-    if (modeVal == PWR_SAVE) {
-      execMeasur();
-    }
-    pubSubClient.publish(statusTopic, STATUS_SLEEPING);
-    updateModeVal((Mode)modeVal);
-    updateSleepTime(sleepTimeStr);
-    cmdReplyMsg.correlId = cmdRequestMsg.msgId;
-    cmdReplyMsg.status = REPLY_STATUS_OK;
-    createAndPublishReplyMsg();
-    Serial.print("Sleep for ["); Serial.print(sleepTime); Serial.println("] mcs");
-    ESP.deepSleep(sleepTime);
-  }
-}
+//void handleSetMode() {
+//  Serial.println("handleSetMode() start...");
+//  char modeVal = cmdRequestMsg.params[0];
+//  Serial.print("modeVal="); Serial.println(modeVal);
+//  if (modeVal == ACTIVE) {
+//    updateModeVal(ACTIVE);
+//    cmdReplyMsg.correlId = cmdRequestMsg.msgId;
+//    cmdReplyMsg.status = REPLY_STATUS_OK;
+//    createAndPublishReplyMsg();
+//    ESP.restart();
+//  } else if (modeVal == SUSPENDED || modeVal == PWR_SAVE) {
+//    String sleepTimeStr = cmdRequestMsg.params.substring(2);
+//    long sleepTime = sleepTimeToMcSec(sleepTimeStr);
+//    if (modeVal == PWR_SAVE) {
+//      execMeasur();
+//    }
+//    pubSubClient.publish(statusTopic, STATUS_SLEEPING);
+//    updateModeVal((Mode)modeVal);
+//    updateSleepTime(sleepTimeStr);
+//    cmdReplyMsg.correlId = cmdRequestMsg.msgId;
+//    cmdReplyMsg.status = REPLY_STATUS_OK;
+//    createAndPublishReplyMsg();
+//    Serial.print("Sleep for ["); Serial.print(sleepTime); Serial.println("] mcs");
+//    ESP.deepSleep(sleepTime);
+//  }
+//}
 
-void preprocessMode() {
-   Serial.println("preprocessMode() start...");
-   if (!pubSubClient.connected()) {
-      reconnect();
-    }
-   Mode mode = readModeVal();
-   if (mode == PWR_SAVE) {
-     execMeasur();
-   }
-   if (mode == PWR_SAVE || mode == SUSPENDED) {
-    Serial.println("Waiting for command msg start...");
-    delay(WAIT_FOR_COMMAND_MSG_DELAY);
-    Serial.println("Waiting for command msg complete...");
-    pubSubClient.loop();
-    pubSubClient.loop();
-    long sleepTime = sleepTimeToMcSec(readSleepTime());
-    pubSubClient.publish(statusTopic, STATUS_SLEEPING);
-    Serial.print("Sleep for ["); Serial.print(sleepTime); Serial.println("] mcs");
-    ESP.deepSleep(sleepTime);
-  }
-  Serial.println("preprocessMode() complete...");
-}
+//void preprocessMode() {
+//   Serial.println("preprocessMode() start...");
+////   if (!pubSubClient.connected()) {
+////      reconnect();
+////    }
+//   Mode mode = readModeVal();
+//   if (mode == PWR_SAVE) {
+//     execMeasur();
+//   }
+//   if (mode == PWR_SAVE || mode == SUSPENDED) {
+//    Serial.println("Waiting for command msg start...");
+//    delay(WAIT_FOR_COMMAND_MSG_DELAY);
+//    Serial.println("Waiting for command msg complete...");
+//    pubSubClient.loop();
+//    pubSubClient.loop();
+//    long sleepTime = sleepTimeToMcSec(readSleepTime());
+//    pubSubClient.publish(statusTopic, STATUS_SLEEPING);
+//    Serial.print("Sleep for ["); Serial.print(sleepTime); Serial.println("] mcs");
+//    ESP.deepSleep(sleepTime);
+//  }
+//  Serial.println("preprocessMode() complete...");
+//}
 
 Mode readModeVal() {
   Serial.println("readModeVal() start...");
